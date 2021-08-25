@@ -1,0 +1,31 @@
+on:
+  schedule:
+    - cron: "30 4 * * 3"
+  push:
+    branches:
+      - master
+
+jobs:
+  render:
+    name: Render my document
+    runs-on: macOS-latest
+    steps:
+      - name: Create and populate .Renviron file
+        run: |
+          echo GITHUB_PAT="$GH_PAT" >> ~/.Renviron
+        shell: bash
+        env:
+          GH_PAT: ${{secrets.GH_PAT}}
+      - uses: actions/checkout@v2
+      - uses: r-lib/actions/setup-r@v1
+      - uses: r-lib/actions/setup-pandoc@v1
+      - uses: r-lib/actions/setup-tinytex@v1
+      - name: Install rmarkdown
+        run: Rscript -e 'install.packages(c("pointblank", "projmgr", "dplyr", "purrr", "glue", "rmarkdown", "knitr"))'
+      - name: Render my document to all types
+        run: Rscript -e 'rmarkdown::render("data-valid-pipe.Rmd", output_file = "index.html", output_dir = "docs")'
+      - name: Commit results
+        run: |
+          git add --force docs
+          git commit -m 'Rerun validation checks' || echo "No changes to commit"
+          git push origin || echo "No changes to commit"
