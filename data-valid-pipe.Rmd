@@ -1,0 +1,92 @@
+---
+title: "Data Validation Report"
+output: 
+  html_document:
+    theme: cosmo
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, error = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r pkg-load}
+library(pointblank)
+library(projmgr)
+library(dplyr)
+library(purrr)
+library(glue)
+library(knitr)
+```
+
+## Validation Results
+
+```{r data-validation}
+tbl <- data.frame(x = c(1, 2, 3, 3), y = c(1, 1, 2, 2))
+act <- action_levels(warn_at = 0.01, notify_at = 0.01, stop_at = NULL)
+table_name <- "my_table"
+
+agent <-
+  create_agent(tbl, actions = act) %>%
+  col_vals_between(vars(x), 1, 2) %>%
+  col_vals_not_null(vars(x)) %>%
+  rows_distinct(vars(x,y))
+
+res <- interrogate(agent)
+res
+```
+
+## Links to Open Issues
+
+```{r post-to-github}
+repo <- create_repo_ref("emilyriederer", "data-validation-demo")
+desc_components <- c(
+  "Variables: {glue_collapse(column)}",
+  "Date: {Sys.Date()}",
+  "Frequency: {n_failed}/{n} ({f_failed})",
+  "See full report at https://emilyriederer.github.io/data-validation-demo/"
+)
+desc_template <- paste(desc_components, collapse = "\n")
+
+out <- 
+  res$validation_set %>%
+  filter(warn) %>%
+  select(columns_expr, brief, column, n, n_failed, f_failed) 
+
+issues_df <-
+  out %>%
+  rowwise() %>%
+  mutate(col_list = map(column, ~strsplit(., split = ", ")[[1]])) %>%
+  transmute(
+    title = glue("In {table_name}: {brief}"),
+    body = glue(desc_template),
+    label_table = glue("table:{table_name}"),
+    label_vars  = list(glue("var:{col_list}"))
+  ) %>%
+  transmute(
+    title,
+    body,
+    labels = list(c(label_table, unlist(label_vars)))
+  )
+
+issue_numbers <- pmap(issues_df, possibly(~post_issue(ref = repo, ...), otherwise = ""))
+```
+
+```{r link-to-github, results = "asis"}
+issues_open <- 
+  get_issues(repo, state = "open") %>%
+  parse_issues() %>%
+  arrange(number) %>%
+  mutate(link = glue("[{number}. {title}]({url})"))
+
+issues_open %>%
+    rowwise() %>%
+    select(
+        `Open Since` = created_at,
+        `Issue` = link,
+        `Assigned` = assignees_login,
+        `Activity` = n_comments
+    ) %>%
+  kable()
+```
+
+
