@@ -68,7 +68,9 @@ issues_df <-
     labels = list(c(label_table, unlist(label_vars)))
   )
 
-issue_numbers <- pmap(issues_df, possibly(~post_issue(ref = repo, ...), otherwise = ""))
+issue_numbers <- pmap(issues_df, 
+                      possibly(~post_issue(ref = repo, ...), otherwise = "")
+                      )
 ```
 
 ```{r link-to-github, results = "asis"}
